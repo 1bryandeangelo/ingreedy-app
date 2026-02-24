@@ -17,7 +17,7 @@ export interface MealDBMeal {
   strInstructions: string;
   strYoutube: string;
   strSource: string;
-  [key: string]: string | null;
+  [key: string]: any;
 }
 
 export interface RankedMeal extends MealDBMeal {

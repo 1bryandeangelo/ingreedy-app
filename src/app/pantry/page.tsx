@@ -97,7 +97,7 @@ export default function PantryPage() {
 
     const { data, error: insertError } = await supabase
       .from('pantry_items')
-      .insert(newItem)
+      .insert(newItem as any)
       .select()
       .single();
 

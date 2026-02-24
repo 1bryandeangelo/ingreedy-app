@@ -58,10 +58,10 @@ export function rankMealsByPantryQuantity(
   meals: MealDBMeal[],
   pantryItems: PantryItem[],
   expiringNames: string[]
-): RankedMeal[] {
+): any[] {
   const expiringLower = expiringNames.map((n) => n.toLowerCase());
 
-  return meals
+  return (meals as MealDBMeal[])
     .map((meal) => {
       const totalIngredients = extractIngredients(meal);
       const deficits = analyzeRecipeDeficits(meal, pantryItems);
@@ -129,7 +129,7 @@ export function rankMealsByPantryQuantity(
         return b.quantityMatchPercent - a.quantityMatchPercent;
       }
       return b.matchPercent - a.matchPercent;
-    });
+    }) as unknown as RankedMeal[];
 }
 
 /**
@@ -139,11 +139,11 @@ export function rankMealsByPantry(
   meals: MealDBMeal[],
   pantryNames: string[],
   expiringNames: string[]
-): RankedMeal[] {
+): any[] {
   const pantryLower = pantryNames.map((n) => n.toLowerCase());
   const expiringLower = expiringNames.map((n) => n.toLowerCase());
 
-  return meals
+  return (meals as MealDBMeal[])
     .map((meal) => {
       const totalIngredients = extractIngredients(meal);
       const matchedIngredients = totalIngredients.filter((ing) =>
@@ -176,5 +176,5 @@ export function rankMealsByPantry(
       if (a.hasExpiringMatch && !b.hasExpiringMatch) return -1;
       if (!a.hasExpiringMatch && b.hasExpiringMatch) return 1;
       return b.matchPercent - a.matchPercent;
-    });
+    }) as unknown as RankedMeal[];
 }
