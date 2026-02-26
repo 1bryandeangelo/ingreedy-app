@@ -10,7 +10,7 @@ import {
   getMealById,
   rankMealsByPantryQuantity,
 } from '@/lib/mealdb';
-import { calculateSurplus, type RecipeSurplus } from '@/lib/quantity';
+import { calculateSurplus, analyzeRecipeDeficits, type RecipeSurplus } from '@/lib/quantity';
 import type { PantryItem, RankedMeal, MealDBMeal } from '@/types';
 
 // ──────────────────────────────────────────
@@ -136,6 +136,8 @@ export default function RecipesPage() {
     Record<string, RecipeSurplus[]>
   >({});
   const [surplusPopupOpen, setSurplusPopupOpen] = useState<string | null>(null);
+  const [addedToShoppingList, setAddedToShoppingList] = useState<Set<string>>(new Set());
+  const [addingToList, setAddingToList] = useState<string | null>(null);
 
   useEffect(() => {
     if (!session) {
@@ -274,6 +276,46 @@ export default function RecipesPage() {
       (s) => s.shelfLifeDays !== null && s.shelfLifeDays <= 3
     );
     return hasUrgent ? 'red' : 'orange';
+  };
+
+  // Add missing + insufficient ingredients to shopping list
+  const addToShoppingList = async (meal: RankedMeal) => {
+    if (!session) return;
+    setAddingToList(meal.idMeal);
+
+    // Get full meal details for quantity info
+    let detail = mealDetails[meal.idMeal];
+    if (!detail) {
+      detail = (await getMealById(meal.idMeal)) as MealDBMeal;
+      if (detail) {
+        setMealDetails((prev) => ({ ...prev, [meal.idMeal]: detail }));
+      }
+    }
+
+    if (!detail) {
+      setAddingToList(null);
+      return;
+    }
+
+    const deficits = analyzeRecipeDeficits(detail, pantryItems);
+    const itemsToAdd = deficits
+      .filter((d) => !d.sufficient)
+      .map((d) => ({
+        user_id: session.user.id,
+        ingredient_name: d.ingredientName,
+        amount: d.have ? d.deficit : d.needed.amount,
+        unit: d.deficitUnit,
+        for_recipe: meal.strMeal,
+        for_meal_id: meal.idMeal,
+        checked: false,
+      }));
+
+    if (itemsToAdd.length > 0) {
+      await supabase.from('shopping_list').insert(itemsToAdd as any);
+    }
+
+    setAddedToShoppingList((prev) => new Set(Array.from(prev).concat(meal.idMeal)));
+    setAddingToList(null);
   };
 
   const displayedMeals = filterExpiring
@@ -560,7 +602,7 @@ export default function RecipesPage() {
                   </div>
 
                   {/* Action buttons row */}
-                  <div className="flex items-center gap-3 relative">
+                  <div className="flex items-center gap-3 relative flex-wrap">
                     {/* View Instructions button */}
                     <button
                       onClick={() => toggleInstructions(meal.idMeal)}
@@ -568,6 +610,32 @@ export default function RecipesPage() {
                     >
                       {isExpanded ? 'Hide Instructions ▲' : 'View Instructions ▼'}
                     </button>
+
+                    {/* Add to Shopping List button */}
+                    {(meal.missingIngredients.length > 0 ||
+                      meal.insufficientIngredients.length > 0) && (
+                      <button
+                        onClick={() => addToShoppingList(meal)}
+                        disabled={
+                          addingToList === meal.idMeal ||
+                          addedToShoppingList.has(meal.idMeal)
+                        }
+                        className={`text-sm px-3 py-1 rounded-lg font-medium transition ${
+                          addedToShoppingList.has(meal.idMeal)
+                            ? 'bg-green-100 text-green-700 cursor-default'
+                            : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                        }`}
+                      >
+                        {addingToList === meal.idMeal
+                          ? 'Adding…'
+                          : addedToShoppingList.has(meal.idMeal)
+                          ? '✓ Added to list'
+                          : `🛒 Add ${
+                              meal.missingIngredients.length +
+                              meal.insufficientIngredients.length
+                            } to shopping list`}
+                      </button>
+                    )}
 
                     {/* Surplus popup (anchored to this row) */}
                     {isSurplusOpen && surplusMap[meal.idMeal] && (

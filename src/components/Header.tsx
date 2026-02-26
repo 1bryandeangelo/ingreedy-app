@@ -27,10 +27,10 @@ export default function Header() {
           🥬 Ingreedy
         </Link>
 
-        <nav className="flex items-center gap-6">
+        <nav className="flex items-center gap-4 md:gap-6">
           <Link
             href="/pantry"
-            className={`text-lg hover:underline underline-offset-4 ${
+            className={`text-base md:text-lg hover:underline underline-offset-4 ${
               isActive('/pantry') ? 'underline font-semibold' : ''
             }`}
           >
@@ -38,25 +38,33 @@ export default function Header() {
           </Link>
           <Link
             href="/recipes"
-            className={`text-lg hover:underline underline-offset-4 ${
+            className={`text-base md:text-lg hover:underline underline-offset-4 ${
               isActive('/recipes') ? 'underline font-semibold' : ''
             }`}
           >
             Recipes
+          </Link>
+          <Link
+            href="/shopping"
+            className={`text-base md:text-lg hover:underline underline-offset-4 ${
+              isActive('/shopping') ? 'underline font-semibold' : ''
+            }`}
+          >
+            🛒 Shop
           </Link>
 
           {session ? (
             <button
               onClick={handleLogout}
               disabled={loggingOut}
-              className="bg-red-600 hover:bg-red-700 disabled:opacity-50 px-5 py-2 rounded-lg text-lg font-medium transition"
+              className="bg-red-600 hover:bg-red-700 disabled:opacity-50 px-4 md:px-5 py-2 rounded-lg text-base md:text-lg font-medium transition"
             >
               {loggingOut ? 'Logging out…' : 'Log Out'}
             </button>
           ) : (
             <Link
               href="/auth/login"
-              className="bg-white text-green-700 px-5 py-2 rounded-lg text-lg font-medium hover:bg-green-50 transition"
+              className="bg-white text-green-700 px-4 md:px-5 py-2 rounded-lg text-base md:text-lg font-medium hover:bg-green-50 transition"
             >
               Log In
             </Link>
