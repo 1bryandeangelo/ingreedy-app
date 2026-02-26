@@ -362,7 +362,22 @@ export default function RecipesPage() {
       const searchTerms = pantryItems.slice(0, 5).map((i) => i.name);
       const query = searchTerms.join(' ');
 
-      const { meals } = await searchEdamamRecipes(query);
+      const { meals: rawMeals } = await searchEdamamRecipes(query);
+
+      // Deduplicate by name similarity
+      const seen = new Set<string>();
+      const meals = rawMeals.filter((m) => {
+        const key = m.strMeal.toLowerCase().trim();
+        if (seen.has(key)) return false;
+        // Check for near-duplicates (same words, different order)
+        for (const existing of Array.from(seen)) {
+          const words1 = key.split(' ').sort().join(' ');
+          const words2 = existing.split(' ').sort().join(' ');
+          if (words1 === words2) return false;
+        }
+        seen.add(key);
+        return true;
+      });
 
       // Edamam returns full details already — no need for separate fetch
       // Quantity-aware ranking

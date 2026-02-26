@@ -217,7 +217,9 @@ export async function searchEdamamRecipes(
   if (options.mealType) params.set('mealType', options.mealType);
   if (options.dishType) params.set('dishType', options.dishType);
 
-  const res = await fetch(`${EDAMAM_BASE_URL}?${params.toString()}`);
+  const res = await fetch(`${EDAMAM_BASE_URL}?${params.toString()}`, {
+    headers: { 'Edamam-Account-User': EDAMAM_APP_ID },
+  });
 
   if (!res.ok) {
     console.error('Edamam API error:', res.status, await res.text());
@@ -263,7 +265,8 @@ export async function getEdamamRecipeById(
   });
 
   const res = await fetch(
-    `${EDAMAM_BASE_URL}/by-uri?${params.toString()}&uri=${encodeURIComponent(uri)}`
+    `${EDAMAM_BASE_URL}/by-uri?${params.toString()}&uri=${encodeURIComponent(uri)}`,
+    { headers: { 'Edamam-Account-User': EDAMAM_APP_ID } }
   );
 
   if (!res.ok) return null;
@@ -280,7 +283,9 @@ export async function getEdamamRecipeById(
 export async function fetchNextPage(
   nextPageUrl: string
 ): Promise<{ meals: MealDBMeal[]; totalResults: number; nextPage: string | null }> {
-  const res = await fetch(nextPageUrl);
+  const res = await fetch(nextPageUrl, {
+    headers: { 'Edamam-Account-User': EDAMAM_APP_ID },
+  });
 
   if (!res.ok) {
     return { meals: [], totalResults: 0, nextPage: null };
