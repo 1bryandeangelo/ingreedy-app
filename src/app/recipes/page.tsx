@@ -6,24 +6,35 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { differenceInDays, parseISO } from 'date-fns';
 import {
-  searchMealsByIngredient,
-  getMealById,
-  rankMealsByPantryQuantity,
-} from '@/lib/mealdb';
+  searchEdamamRecipes,
+  getEdamamRecipeById,
+  rankEdamamMeals,
+  getEdamamExtras,
+} from '@/lib/edamam';
 import { calculateSurplus, analyzeRecipeDeficits, type RecipeSurplus } from '@/lib/quantity';
+import { findCompanionRecipes, findOptimalCombo, type CompanionRecipe, type OptimizationResult } from '@/lib/optimizer';
 import type { PantryItem, RankedMeal, MealDBMeal } from '@/types';
 
 // ──────────────────────────────────────────
-// Surplus Popup Component
+// Surplus Popup Component with Optimization
 // ──────────────────────────────────────────
 function SurplusPopup({
   surplus,
+  meal,
+  pantryItems,
   onClose,
+  onAddToShoppingList,
 }: {
   surplus: RecipeSurplus[];
+  meal: MealDBMeal;
+  pantryItems: PantryItem[];
   onClose: () => void;
+  onAddToShoppingList: (companionMeal: MealDBMeal) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [companions, setCompanions] = useState<CompanionRecipe[]>([]);
+  const [loadingCompanions, setLoadingCompanions] = useState(false);
+  const [searched, setSearched] = useState(false);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -42,20 +53,38 @@ function SurplusPopup({
     (s) => s.shelfLifeDays === null || s.shelfLifeDays > 7
   );
 
+  const findCompanions = async () => {
+    setLoadingCompanions(true);
+    try {
+      const result = await findCompanionRecipes(meal, pantryItems, 10);
+      const optimal = findOptimalCombo(
+        [...result.companions],
+        result.perishableSurplus,
+        3
+      );
+      setCompanions(optimal);
+    } catch (err) {
+      console.error('Optimization error:', err);
+    }
+    setLoadingCompanions(false);
+    setSearched(true);
+  };
+
   return (
     <div
       ref={ref}
-      className="absolute z-50 bottom-full mb-2 right-0 w-72 bg-white rounded-xl shadow-xl border border-gray-200 p-4 animate-in fade-in"
+      className="absolute z-50 bottom-full mb-2 right-0 bg-white rounded-xl shadow-xl border border-gray-200 p-4"
+      style={{ width: companions.length > 0 ? '360px' : '288px' }}
     >
       <div className="flex items-center justify-between mb-2">
         <p className="text-sm font-semibold text-amber-800">
-          📦 Leftover Alert
+          Leftover Alert
         </p>
         <button
           onClick={onClose}
           className="text-gray-400 hover:text-gray-600 text-lg leading-none"
         >
-          ×
+          x
         </button>
       </div>
       <p className="text-xs text-amber-700 mb-3">
@@ -90,9 +119,9 @@ function SurplusPopup({
       )}
 
       {nonPerishable.length > 0 && (
-        <details className="mb-2">
+        <details className="mb-3">
           <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600">
-            Non-perishable surplus ({nonPerishable.length} items — no rush)
+            Non-perishable surplus ({nonPerishable.length} items)
           </summary>
           <div className="mt-1.5 space-y-1 pl-2">
             {nonPerishable.map((s) => (
@@ -105,10 +134,156 @@ function SurplusPopup({
         </details>
       )}
 
-      <p className="text-xs text-amber-600 mt-2 italic">
-        🔜 Recipe optimization coming soon — we&apos;ll suggest meals to use up
-        these leftovers!
+      {/* Companion recipes section */}
+      {!searched && perishable.length > 0 && (
+        <button
+          onClick={findCompanions}
+          disabled={loadingCompanions}
+          className="w-full mt-1 px-3 py-2 bg-green-50 text-green-700 text-xs font-medium rounded-lg hover:bg-green-100 transition disabled:opacity-50"
+        >
+          {loadingCompanions
+            ? 'Finding recipes to use up leftovers...'
+            : 'Find recipes to use up leftovers'}
+        </button>
+      )}
+
+      {loadingCompanions && (
+        <div className="text-center py-3">
+          <p className="text-xs text-gray-400">Searching recipes...</p>
+        </div>
+      )}
+
+      {searched && companions.length === 0 && !loadingCompanions && (
+        <p className="text-xs text-gray-400 mt-2 italic">
+          No companion recipes found for these leftovers.
+        </p>
+      )}
+
+      {companions.length > 0 && (
+        <div className="mt-3 border-t border-gray-100 pt-3">
+          <p className="text-xs font-semibold text-green-800 mb-2">
+            Suggested recipes to use up leftovers:
+          </p>
+          <div className="space-y-2.5">
+            {companions.map((c) => (
+              <div
+                key={c.meal.idMeal}
+                className="bg-green-50 rounded-lg p-2.5"
+              >
+                <p className="text-sm font-medium text-gray-800">
+                  {c.meal.strMeal}
+                </p>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {c.surplusUsed.map((s) => (
+                    <span
+                      key={s.ingredientName}
+                      className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded"
+                    >
+                      Uses {s.amountUsed} {s.unit} {s.ingredientName}
+                    </span>
+                  ))}
+                </div>
+                {c.additionalIngredientsNeeded.length > 0 && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Also needs: {c.additionalIngredientsNeeded.slice(0, 3).join(', ')}
+                    {c.additionalIngredientsNeeded.length > 3 &&
+                      ` +${c.additionalIngredientsNeeded.length - 3} more`}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────
+// Recipe Details Component (expanded view)
+// ──────────────────────────────────────────
+function RecipeDetails({ meal }: { meal: MealDBMeal }) {
+  const extras = getEdamamExtras(meal);
+
+  if (extras) {
+    return (
+      <div className="mt-4 pt-4 border-t border-gray-100">
+        {/* Quick stats */}
+        <div className="flex flex-wrap gap-3 mb-3 text-xs text-gray-500">
+          {extras.caloriesPerServing > 0 && (
+            <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded">
+              {extras.caloriesPerServing} cal/serving
+            </span>
+          )}
+          {extras.totalTime > 0 && (
+            <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
+              {extras.totalTime} min
+            </span>
+          )}
+          {extras.yield > 0 && (
+            <span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded">
+              {extras.yield} servings
+            </span>
+          )}
+        </div>
+
+        {/* Diet labels */}
+        {extras.dietLabels.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {extras.dietLabels.map((label: string) => (
+              <span
+                key={label}
+                className="text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full"
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Full ingredient list */}
+        <div className="mb-3">
+          <p className="text-xs font-semibold text-gray-600 mb-1.5">
+            Full ingredient list:
+          </p>
+          <ul className="text-sm text-gray-700 space-y-1 pl-4">
+            {extras.ingredientLines.map((line: string, idx: number) => (
+              <li key={idx} className="list-disc">
+                {line}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Source link */}
+        <a
+          href={extras.sourceUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block mt-1 text-sm text-green-700 hover:underline font-medium"
+        >
+          View full instructions on {extras.source} &rarr;
+        </a>
+      </div>
+    );
+  }
+
+  // Fallback for MealDB recipes
+  return (
+    <div className="mt-4 pt-4 border-t border-gray-100">
+      <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">
+        {meal.strInstructions}
       </p>
+      {meal.strYoutube && (
+        <a
+          href={meal.strYoutube!}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block mt-3 text-sm text-red-600 hover:underline font-medium"
+        >
+          Watch on YouTube
+        </a>
+      )}
     </div>
   );
 }
@@ -176,57 +351,40 @@ export default function RecipesPage() {
     })
     .map((item) => item.name);
 
-  // Search recipes using quantity-aware ranking
+  // Search recipes using Edamam + quantity-aware ranking
   const searchRecipes = useCallback(async () => {
     if (pantryItems.length === 0) return;
     setSearching(true);
     setError('');
 
     try {
+      // Build search query from pantry items (top ingredients)
       const searchTerms = pantryItems.slice(0, 5).map((i) => i.name);
-      const allMealPreviews: MealDBMeal[] = [];
-      const seenIds = new Set<string>();
+      const query = searchTerms.join(' ');
 
-      for (const term of searchTerms) {
-        const meals = await searchMealsByIngredient(term);
-        for (const meal of meals) {
-          if (!seenIds.has(meal.idMeal)) {
-            seenIds.add(meal.idMeal);
-            allMealPreviews.push(meal);
-          }
-        }
-      }
+      const { meals } = await searchEdamamRecipes(query);
 
-      // Fetch full details (limited to 30)
-      const toFetch = allMealPreviews.slice(0, 30);
-      const results = await Promise.allSettled(
-        toFetch.map((m) => getMealById(m.idMeal))
-      );
-
-      const fullMeals: MealDBMeal[] = [];
-      for (const result of results) {
-        if (result.status === 'fulfilled' && result.value) {
-          fullMeals.push(result.value);
-        }
-      }
-
+      // Edamam returns full details already — no need for separate fetch
       // Quantity-aware ranking
-      const ranked = rankMealsByPantryQuantity(
-        fullMeals,
-        pantryItems,
-        expiringNames
-      );
+      const ranked = rankEdamamMeals(meals, pantryItems, expiringNames);
       setRankedMeals(ranked);
 
       // Pre-calculate surplus for all ranked meals
       const newSurplusMap: Record<string, RecipeSurplus[]> = {};
-      for (const meal of fullMeals) {
+      for (const meal of meals) {
         const surplus = calculateSurplus(meal, pantryItems);
         if (surplus.length > 0) {
           newSurplusMap[meal.idMeal] = surplus;
         }
       }
       setSurplusMap(newSurplusMap);
+
+      // Store full details (already have them from Edamam)
+      const detailsMap: Record<string, MealDBMeal> = {};
+      for (const meal of meals) {
+        detailsMap[meal.idMeal] = meal;
+      }
+      setMealDetails(detailsMap);
     } catch (err) {
       setError('Failed to fetch recipes. Please try again.');
       console.error(err);
@@ -251,9 +409,9 @@ export default function RecipesPage() {
 
     setExpandedMeal(mealId);
 
-    // Fetch full details if not cached
+    // Details are already cached from the search (Edamam returns full data)
     if (!mealDetails[mealId]) {
-      const detail = (await getMealById(mealId)) as MealDBMeal;
+      const detail = await getEdamamRecipeById(mealId);
       if (detail) {
         setMealDetails((prev) => ({ ...prev, [mealId]: detail }));
       }
@@ -286,7 +444,7 @@ export default function RecipesPage() {
     // Get full meal details for quantity info
     let detail = mealDetails[meal.idMeal];
     if (!detail) {
-      detail = (await getMealById(meal.idMeal)) as MealDBMeal;
+      detail = (await getEdamamRecipeById(meal.idMeal)) as MealDBMeal;
       if (detail) {
         setMealDetails((prev) => ({ ...prev, [meal.idMeal]: detail }));
       }
@@ -482,11 +640,20 @@ export default function RecipesPage() {
                   {/* Surplus badge (bottom-left on image) */}
                   {surplusUrgency !== 'none' && (
                     <button
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation();
-                        setSurplusPopupOpen(
-                          isSurplusOpen ? null : meal.idMeal
-                        );
+                        if (isSurplusOpen) {
+                          setSurplusPopupOpen(null);
+                        } else {
+                          // Ensure we have full meal details for the optimizer
+                          if (!mealDetails[meal.idMeal]) {
+                            const detail = await getEdamamRecipeById(meal.idMeal);
+                            if (detail) {
+                              setMealDetails((prev) => ({ ...prev, [meal.idMeal]: detail }));
+                            }
+                          }
+                          setSurplusPopupOpen(meal.idMeal);
+                        }
                       }}
                       className={`absolute bottom-3 left-3 w-9 h-9 rounded-full flex items-center justify-center text-lg shadow-lg border-2 transition hover:scale-110 ${
                         surplusUrgency === 'red'
@@ -608,7 +775,7 @@ export default function RecipesPage() {
                       onClick={() => toggleInstructions(meal.idMeal)}
                       className="text-green-700 text-sm font-medium hover:underline"
                     >
-                      {isExpanded ? 'Hide Instructions ▲' : 'View Instructions ▼'}
+                      {isExpanded ? 'Hide Details ▲' : 'View Details ▼'}
                     </button>
 
                     {/* Add to Shopping List button */}
@@ -641,30 +808,19 @@ export default function RecipesPage() {
                     {isSurplusOpen && surplusMap[meal.idMeal] && (
                       <SurplusPopup
                         surplus={surplusMap[meal.idMeal]}
+                        meal={mealDetails[meal.idMeal] || meal}
+                        pantryItems={pantryItems}
                         onClose={() => setSurplusPopupOpen(null)}
+                        onAddToShoppingList={() => {}}
                       />
                     )}
                   </div>
 
                   {/* ==========================================
-                      EXPANDED VIEW: Instructions ONLY
+                      EXPANDED VIEW: Recipe Details
                       ========================================== */}
                   {isExpanded && mealDetails[meal.idMeal] && (
-                    <div className="mt-4 pt-4 border-t border-gray-100">
-                      <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">
-                        {mealDetails[meal.idMeal].strInstructions}
-                      </p>
-                      {mealDetails[meal.idMeal].strYoutube && (
-                        <a
-                          href={mealDetails[meal.idMeal].strYoutube!}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-block mt-3 text-sm text-red-600 hover:underline font-medium"
-                        >
-                          📺 Watch on YouTube
-                        </a>
-                      )}
-                    </div>
+                    <RecipeDetails meal={mealDetails[meal.idMeal]} />
                   )}
                 </div>
               </div>
