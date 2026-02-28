@@ -1,13 +1,14 @@
 import './globals.css';
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { DM_Sans } from 'next/font/google';
 import SupabaseProvider from '@/components/SupabaseProvider';
 import QueryClientProviderWrapper from '@/components/QueryClientProviderWrapper';
 import Header from '@/components/Header';
+import { ToastProvider } from '@/components/Toast';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
-const inter = Inter({ subsets: ['latin'] });
+const dmSans = DM_Sans({ subsets: ['latin'], weight: ['400', '500', '600', '700'] });
 
 export const metadata: Metadata = {
   title: 'Ingreedie – Use What You Have, Waste Less',
@@ -49,12 +50,14 @@ export default async function RootLayout({
 
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body className={dmSans.className}>
         <SupabaseProvider initialSession={session}>
-          <Header />
-          <QueryClientProviderWrapper>
-            <main className="min-h-[calc(100vh-72px)]">{children}</main>
-          </QueryClientProviderWrapper>
+          <ToastProvider>
+            <Header />
+            <QueryClientProviderWrapper>
+              <main className="min-h-[calc(100vh-72px)]">{children}</main>
+            </QueryClientProviderWrapper>
+          </ToastProvider>
         </SupabaseProvider>
       </body>
     </html>

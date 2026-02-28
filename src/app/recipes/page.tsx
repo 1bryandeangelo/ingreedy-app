@@ -14,6 +14,7 @@ import {
 import { calculateSurplus, analyzeRecipeDeficits, type RecipeSurplus } from '@/lib/quantity';
 import { findCompanionRecipes, findOptimalCombo, type CompanionRecipe, type OptimizationResult } from '@/lib/optimizer';
 import type { PantryItem, RankedMeal, MealDBMeal } from '@/types';
+import { RecipeCardSkeleton } from '@/components/Skeletons';
 
 // ──────────────────────────────────────────
 // Surplus Popup Component with Optimization
@@ -566,10 +567,7 @@ export default function RecipesPage() {
       )}
 
       {loading || searching ? (
-        <div className="text-center text-gray-500 py-20">
-          <div className="text-4xl mb-3">🍳</div>
-          <p>{loading ? 'Loading your pantry…' : 'Finding recipes…'}</p>
-        </div>
+        <RecipeCardSkeleton />
       ) : pantryItems.length === 0 ? (
         <div className="text-center py-20">
           <div className="text-5xl mb-4">📦</div>

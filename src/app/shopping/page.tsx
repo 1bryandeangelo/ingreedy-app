@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useSupabase } from '@/components/SupabaseProvider';
 import { useRouter } from 'next/navigation';
 import { DEFAULT_EXPIRATIONS } from '@/types';
+import { useToast } from '@/components/Toast';
+import { ShoppingListSkeleton } from '@/components/Skeletons';
 
 interface ShoppingItem {
   id: string;
@@ -20,6 +22,7 @@ interface ShoppingItem {
 export default function ShoppingPage() {
   const { supabase, session } = useSupabase();
   const router = useRouter();
+  const { addToast } = useToast();
 
   const [items, setItems] = useState<ShoppingItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -119,6 +122,7 @@ export default function ShoppingPage() {
       // Mark as checked and remove from list
       await (supabase as any).from('shopping_list').delete().eq('id', item.id);
       setItems((prev) => prev.filter((i) => i.id !== item.id));
+      addToast(`${item.ingredient_name} added to pantry`);
     }
 
     setAddingToPantry(null);
@@ -247,10 +251,7 @@ export default function ShoppingPage() {
       </div>
 
       {loading ? (
-        <div className="text-center text-gray-500 py-20">
-          <div className="text-4xl mb-3">🛒</div>
-          <p>Loading your shopping list…</p>
-        </div>
+        <ShoppingListSkeleton />
       ) : items.length === 0 ? (
         <div className="text-center py-20">
           <div className="text-5xl mb-4">🛒</div>
