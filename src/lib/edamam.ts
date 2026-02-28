@@ -237,7 +237,7 @@ export async function searchEdamamRecipes(
 
 /**
  * Search by specific ingredients (comma-separated).
- * This is the primary search for Ingreedy — "what can I make with these?"
+ * This is the primary search for Ingreedie — "what can I make with these?"
  */
 export async function searchByIngredients(
   ingredients: string[]

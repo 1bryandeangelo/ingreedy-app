@@ -10,7 +10,7 @@ export default function HomePage() {
     <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
       <div className="max-w-2xl">
         <h1 className="text-5xl font-bold text-green-800 mb-4">
-          🥬 Ingreedy
+          Ingreedie
         </h1>
         <p className="text-xl text-gray-600 mb-2">
           Use What You Have. Waste Less.

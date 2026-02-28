@@ -46,7 +46,7 @@ export default function ShoppingPage() {
   const fetchItems = async () => {
     if (!session) return;
     const { data } = await (supabase as any)
-      .from('shopping_list' as any)
+      .from('shopping_list')
       .select('*')
       .eq('user_id', session.user.id)
       .order('checked', { ascending: true })
@@ -62,15 +62,15 @@ export default function ShoppingPage() {
       prev.map((i) => (i.id === id ? { ...i, checked: !current } : i))
     );
     await (supabase as any)
-      .from('shopping_list' as any)
-      .update({ checked: !current } as any)
+      .from('shopping_list')
+      .update({ checked: !current })
       .eq('id', id);
   };
 
   // Delete single item
   const deleteItem = async (id: string) => {
     setItems((prev) => prev.filter((i) => i.id !== id));
-    await (supabase as any).from('shopping_list' as any).delete().eq('id', id);
+    await (supabase as any).from('shopping_list').delete().eq('id', id);
   };
 
   // Clear all checked items
@@ -80,7 +80,7 @@ export default function ShoppingPage() {
 
     setItems((prev) => prev.filter((i) => !i.checked));
     await (supabase as any)
-      .from('shopping_list' as any)
+      .from('shopping_list')
       .delete()
       .in('id', checkedIds);
   };
@@ -91,7 +91,7 @@ export default function ShoppingPage() {
     if (!confirm('Clear your entire shopping list?')) return;
     setItems([]);
     await (supabase as any)
-      .from('shopping_list' as any)
+      .from('shopping_list')
       .delete()
       .eq('user_id', session.user.id);
   };
@@ -117,7 +117,7 @@ export default function ShoppingPage() {
 
     if (!error) {
       // Mark as checked and remove from list
-      await (supabase as any).from('shopping_list' as any).delete().eq('id', item.id);
+      await (supabase as any).from('shopping_list').delete().eq('id', item.id);
       setItems((prev) => prev.filter((i) => i.id !== item.id));
     }
 
@@ -130,7 +130,7 @@ export default function ShoppingPage() {
     setAdding(true);
 
     const { data, error } = await (supabase as any)
-      .from('shopping_list' as any)
+      .from('shopping_list')
       .insert({
         user_id: session.user.id,
         ingredient_name: manualName.trim(),
@@ -166,11 +166,11 @@ export default function ShoppingPage() {
   if (!session) return null;
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-10">
-      <div className="flex items-center justify-between mb-8">
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 sm:mb-8 gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-green-800">🛒 Shopping List</h1>
-          <p className="text-gray-500 mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold text-green-800">Shopping List</h1>
+          <p className="text-gray-500 mt-1 text-sm sm:text-base">
             {uncheckedItems.length} item{uncheckedItems.length !== 1 ? 's' : ''} to buy
           </p>
         </div>
@@ -180,14 +180,14 @@ export default function ShoppingPage() {
             {checkedItems.length > 0 && (
               <button
                 onClick={clearChecked}
-                className="text-sm px-4 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+                className="text-xs sm:text-sm px-3 sm:px-4 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
               >
                 Clear checked ({checkedItems.length})
               </button>
             )}
             <button
               onClick={clearAll}
-              className="text-sm px-4 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition"
+              className="text-xs sm:text-sm px-3 sm:px-4 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition"
             >
               Clear all
             </button>

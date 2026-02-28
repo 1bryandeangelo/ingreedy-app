@@ -498,11 +498,11 @@ export default function RecipesPage() {
   if (!session) return null;
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 sm:mb-8 gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-green-800">
+          <h1 className="text-2xl sm:text-3xl font-bold text-green-800">
             Recipe Suggestions
           </h1>
           <p className="text-gray-500 mt-1">

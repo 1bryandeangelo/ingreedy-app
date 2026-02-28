@@ -10,7 +10,7 @@ import { cookies } from 'next/headers';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Ingreedy – Use What You Have, Waste Less',
+  title: 'Ingreedie – Use What You Have, Waste Less',
   description:
     'Smart recipes from your pantry ingredients – reduce waste with expiration tracking & optimization.',
 };

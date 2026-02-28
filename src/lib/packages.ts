@@ -157,7 +157,7 @@ export const STANDARD_PACKAGES: Record<string, StandardPackage> = {
   'chicken broth':      { amount: 32,   unit: 'fl_oz',  packageLabel: '1 carton (4 cups)',shelfDays: 10,  category: 'canned' },
   'beef broth':         { amount: 32,   unit: 'fl_oz',  packageLabel: '1 carton (4 cups)',shelfDays: 10,  category: 'canned' },
   'vegetable broth':    { amount: 32,   unit: 'fl_oz',  packageLabel: '1 carton (4 cups)',shelfDays: 10,  category: 'canned' },
-  'corn':               { amount: 15,   unit: 'oz',     packageLabel: '1 can',            shelfDays: 730, category: 'canned' },
+  'canned corn':        { amount: 15,   unit: 'oz',     packageLabel: '1 can',            shelfDays: 730, category: 'canned' },
   'green peas':         { amount: 15,   unit: 'oz',     packageLabel: '1 can',            shelfDays: 730, category: 'canned' },
 
   // ─── OILS & VINEGARS ───────────────────────────

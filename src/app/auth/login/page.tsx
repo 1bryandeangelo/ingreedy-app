@@ -37,7 +37,7 @@ export default function LoginPage() {
     <div className="flex items-center justify-center min-h-[80vh] px-6">
       <div className="w-full max-w-md">
         <h1 className="text-3xl font-bold text-green-800 mb-8 text-center">
-          Log In to Ingreedy
+          Log In to Ingreedie
         </h1>
 
         <form onSubmit={handleLogin} className="space-y-5">

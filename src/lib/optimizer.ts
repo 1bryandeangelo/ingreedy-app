@@ -7,7 +7,7 @@
  * 3. Ranks companions by how much surplus they consume before expiration
  * 4. Returns optimized recipe combos that minimize total waste
  *
- * This is the "killer feature" — turning Ingreedy from "what can I cook"
+ * This is the "killer feature" — turning Ingreedie from "what can I cook"
  * into "here's your zero-waste weekly plan."
  */
 

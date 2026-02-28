@@ -159,7 +159,7 @@ export default function PantryPage() {
 
     const fetchItems = async () => {
       const { data, error } = await supabase
-        .from('pantry_items')
+        .from('pantry_items' as any)
         .select('*')
         .eq('user_id', session.user.id)
         .order('created_at', { ascending: false });
@@ -211,8 +211,8 @@ export default function PantryPage() {
       expiration_date: expirationDate || null,
     };
 
-    const { data, error: insertError } = await supabase
-      .from('pantry_items')
+    const { data, error: insertError } = await (supabase as any)
+      .from('pantry_items' as any)
       .insert(newItem)
       .select()
       .single();
@@ -238,8 +238,8 @@ export default function PantryPage() {
     const shelfDays = DEFAULT_EXPIRATIONS[nameLower] || 14;
     const expDate = format(addDays(new Date(), shelfDays), 'yyyy-MM-dd');
 
-    const { data, error } = await supabase
-      .from('pantry_items')
+    const { data, error } = await (supabase as any)
+      .from('pantry_items' as any)
       .insert({
         user_id: session.user.id,
         name: starter.name,
@@ -274,7 +274,7 @@ export default function PantryPage() {
     }
 
     const { error } = await (supabase as any)
-      .from('pantry_items')
+      .from('pantry_items' as any)
       .update(updateData)
       .eq('id', itemId);
 
@@ -288,7 +288,7 @@ export default function PantryPage() {
   };
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase.from('pantry_items').delete().eq('id', id);
+    const { error } = await supabase.from('pantry_items' as any).delete().eq('id', id);
     if (!error) {
       setItems((prev) => prev.filter((item) => item.id !== id));
     }
@@ -339,8 +339,8 @@ export default function PantryPage() {
   if (!session) return null;
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-10">
-      <h1 className="text-3xl font-bold text-green-800 mb-8">Your Pantry</h1>
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+      <h1 className="text-2xl sm:text-3xl font-bold text-green-800 mb-6 sm:mb-8">Your Pantry</h1>
 
       {/* Add Item Form */}
       <form
@@ -455,58 +455,25 @@ export default function PantryPage() {
         <div className="text-center text-gray-500 py-12">Loading pantry...</div>
       ) : (
         <>
-          {/* Quick-add starter ingredients — always visible */}
-          <div className="mb-8 bg-white rounded-xl shadow-md border border-gray-100 p-5">
-            <p className="text-sm font-semibold text-gray-700 mb-3">
-              Quick add common ingredients:
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {STARTER_INGREDIENTS.map((starter) => {
-                const alreadyAdded = items.some(
-                  (i) => i.name.toLowerCase() === starter.name.toLowerCase()
-                );
-                return (
-                  <button
-                    key={starter.name}
-                    onClick={() => !alreadyAdded && handleQuickAdd(starter)}
-                    disabled={alreadyAdded}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
-                      alreadyAdded
-                        ? 'bg-green-100 text-green-700 cursor-default'
-                        : 'bg-white border border-gray-200 text-gray-700 hover:bg-green-50 hover:border-green-300'
-                    }`}
-                  >
-                    {alreadyAdded ? '✓ ' : '+ '}
-                    {starter.name}
-                    {starter.packageLabel && (
-                      <span className="text-xs text-gray-400 ml-1">
-                        ({starter.packageLabel})
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
           {/* Empty state message */}
           {sortedItems.length === 0 && items.length === 0 && (
             <div className="text-center py-8">
-              <div className="text-5xl mb-4">🥬</div>
               <p className="text-gray-600 text-lg mb-2">Your pantry is empty!</p>
               <p className="text-gray-400">
-                Add what you have at home using the form above or the quick-add buttons.
+                Add what you have at home using the form above or the quick-add suggestions below.
               </p>
             </div>
           )}
 
-          {/* Pantry table */}
+          {/* Pantry items */}
           {sortedItems.length > 0 && (
-            <div>
-              <p className="text-xs text-gray-400 mb-2 text-right">
+            <div className="mb-8">
+              <p className="text-xs text-gray-400 mb-2 text-right hidden sm:block">
                 Click any value to edit it
               </p>
-              <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+
+              {/* Desktop table */}
+              <div className="hidden md:block bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
                 <table className="w-full">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200">
@@ -576,8 +543,93 @@ export default function PantryPage() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Mobile cards */}
+              <div className="md:hidden space-y-3">
+                {sortedItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="bg-white rounded-xl shadow-sm border border-gray-100 p-4"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="font-medium text-gray-800 text-base">
+                        <EditableCell
+                          value={item.name}
+                          onSave={(v) => handleEdit(item.id, 'name', v)}
+                        />
+                      </div>
+                      <button
+                        onClick={() => handleDelete(item.id)}
+                        className="text-gray-300 hover:text-red-500 text-lg leading-none transition ml-2"
+                      >
+                        x
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1 text-sm text-gray-600">
+                        <EditableCell
+                          value={String(item.quantity_amount)}
+                          type="number"
+                          onSave={(v) => handleEdit(item.id, 'quantity_amount', v)}
+                          className="w-12 inline-block"
+                        />
+                        <EditableCell
+                          value={item.quantity_unit}
+                          type="select"
+                          options={UNIT_OPTIONS}
+                          onSave={(v) => handleEdit(item.id, 'quantity_unit', v)}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {getExpirationBadge(item.expiration_date)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
+
+          {/* Quick-add suggested ingredients — collapsible, after pantry items */}
+          <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100">
+            <details open={items.length === 0}>
+              <summary className="px-5 py-4 cursor-pointer select-none hover:bg-gray-50 rounded-xl transition">
+                <span className="text-sm font-semibold text-gray-700">
+                  Suggested ingredients
+                </span>
+                <span className="text-xs text-gray-400 ml-2">
+                  ({STARTER_INGREDIENTS.filter(s => !items.some(i => i.name.toLowerCase() === s.name.toLowerCase())).length} available)
+                </span>
+              </summary>
+              <div className="px-5 pb-4 flex flex-wrap gap-2">
+                {STARTER_INGREDIENTS.map((starter) => {
+                  const alreadyAdded = items.some(
+                    (i) => i.name.toLowerCase() === starter.name.toLowerCase()
+                  );
+                  return (
+                    <button
+                      key={starter.name}
+                      onClick={() => !alreadyAdded && handleQuickAdd(starter)}
+                      disabled={alreadyAdded}
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
+                        alreadyAdded
+                          ? 'bg-green-100 text-green-700 cursor-default'
+                          : 'bg-white border border-gray-200 text-gray-700 hover:bg-green-50 hover:border-green-300'
+                      }`}
+                    >
+                      {alreadyAdded ? '✓ ' : '+ '}
+                      {starter.name}
+                      {!alreadyAdded && starter.packageLabel && (
+                        <span className="text-xs text-gray-400 ml-1">
+                          ({starter.packageLabel})
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </details>
+          </div>
         </>
       )}
 
