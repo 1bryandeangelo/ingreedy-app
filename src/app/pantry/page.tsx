@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSupabase } from '@/components/SupabaseProvider';
 import { useRouter } from 'next/navigation';
 import { format, differenceInDays, parseISO, addDays } from 'date-fns';
@@ -10,7 +10,123 @@ import {
   COMMON_INGREDIENTS,
   type PantryItem,
 } from '@/types';
+import { STANDARD_PACKAGES } from '@/lib/packages';
 
+// ──────────────────────────────────────────
+// Inline Editable Cell
+// ──────────────────────────────────────────
+function EditableCell({
+  value,
+  onSave,
+  type = 'text',
+  options,
+  className = '',
+}: {
+  value: string;
+  onSave: (newValue: string) => void;
+  type?: 'text' | 'number' | 'date' | 'select';
+  options?: { value: string; label: string }[];
+  className?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState(value);
+  const inputRef = useRef<HTMLInputElement | HTMLSelectElement>(null);
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      if (inputRef.current instanceof HTMLInputElement) {
+        inputRef.current.select();
+      }
+    }
+  }, [editing]);
+
+  const handleSave = () => {
+    setEditing(false);
+    if (editValue !== value) {
+      onSave(editValue);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleSave();
+    if (e.key === 'Escape') {
+      setEditValue(value);
+      setEditing(false);
+    }
+  };
+
+  if (editing) {
+    if (type === 'select' && options) {
+      return (
+        <select
+          ref={inputRef as React.RefObject<HTMLSelectElement>}
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={handleSave}
+          className="border border-green-400 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+        >
+          {options.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      );
+    }
+
+    return (
+      <input
+        ref={inputRef as React.RefObject<HTMLInputElement>}
+        type={type}
+        value={editValue}
+        onChange={(e) => setEditValue(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={handleKeyDown}
+        step={type === 'number' ? '0.1' : undefined}
+        min={type === 'number' ? '0.1' : undefined}
+        className="border border-green-400 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full"
+      />
+    );
+  }
+
+  return (
+    <span
+      onClick={() => {
+        setEditValue(value);
+        setEditing(true);
+      }}
+      className={`cursor-pointer hover:bg-green-50 rounded px-1 py-0.5 transition ${className}`}
+      title="Click to edit"
+    >
+      {value || '—'}
+    </span>
+  );
+}
+
+// ──────────────────────────────────────────
+// Quick-add suggestions from standard packages
+// ──────────────────────────────────────────
+const STARTER_INGREDIENTS = [
+  'Eggs', 'Milk', 'Butter', 'Chicken Breast', 'Rice', 'Onions',
+  'Garlic', 'Olive Oil', 'Salt', 'Pasta', 'Tomatoes', 'Cheese',
+  'Ground Beef', 'Bread', 'Potatoes', 'Carrots', 'Bell Pepper',
+  'Sour Cream', 'Bacon', 'Flour', 'Sugar', 'Chicken Broth',
+  'Soy Sauce', 'Lemons', 'Spinach', 'Mushrooms', 'Black Pepper',
+  'Cheddar Cheese', 'Greek Yogurt', 'Tortillas',
+].map((name) => {
+  const pkg = STANDARD_PACKAGES[name.toLowerCase()];
+  return {
+    name,
+    amount: pkg?.amount ?? 1,
+    unit: pkg?.unit ?? 'count',
+    packageLabel: pkg?.packageLabel ?? '',
+  };
+});
+
+// ──────────────────────────────────────────
+// Main Pantry Page
+// ──────────────────────────────────────────
 export default function PantryPage() {
   const { supabase, session } = useSupabase();
   const router = useRouter();
@@ -97,7 +213,7 @@ export default function PantryPage() {
 
     const { data, error: insertError } = await supabase
       .from('pantry_items')
-      .insert(newItem as any)
+      .insert(newItem)
       .select()
       .single();
 
@@ -112,6 +228,63 @@ export default function PantryPage() {
     }
 
     setAdding(false);
+  };
+
+  // Quick-add for onboarding
+  const handleQuickAdd = async (starter: typeof STARTER_INGREDIENTS[0]) => {
+    if (!session) return;
+
+    const nameLower = starter.name.toLowerCase();
+    const shelfDays = DEFAULT_EXPIRATIONS[nameLower] || 14;
+    const expDate = format(addDays(new Date(), shelfDays), 'yyyy-MM-dd');
+
+    const { data, error } = await supabase
+      .from('pantry_items')
+      .insert({
+        user_id: session.user.id,
+        name: starter.name,
+        quantity_amount: starter.amount,
+        quantity_unit: starter.unit,
+        expiration_date: expDate,
+      })
+      .select()
+      .single();
+
+    if (!error && data) {
+      setItems((prev) => [data, ...prev]);
+    }
+  };
+
+  // Inline edit handler
+  const handleEdit = async (
+    itemId: string,
+    field: string,
+    value: string
+  ) => {
+    let updateData: Record<string, any> = {};
+
+    if (field === 'name') {
+      updateData.name = value;
+    } else if (field === 'quantity_amount') {
+      updateData.quantity_amount = parseFloat(value) || 1;
+    } else if (field === 'quantity_unit') {
+      updateData.quantity_unit = value;
+    } else if (field === 'expiration_date') {
+      updateData.expiration_date = value || null;
+    }
+
+    const { error } = await (supabase as any)
+      .from('pantry_items')
+      .update(updateData)
+      .eq('id', itemId);
+
+    if (!error) {
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === itemId ? { ...item, ...updateData } : item
+        )
+      );
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -271,75 +444,141 @@ export default function PantryPage() {
               disabled={adding}
               className="w-full bg-green-700 text-white py-2 px-4 rounded-lg font-semibold hover:bg-green-800 disabled:opacity-50 transition"
             >
-              {adding ? '…' : '+'}
+              {adding ? '...' : '+'}
             </button>
           </div>
         </div>
       </form>
 
-      {/* Pantry Table */}
+      {/* Pantry Content */}
       {loading ? (
-        <div className="text-center text-gray-500 py-12">Loading pantry…</div>
-      ) : sortedItems.length === 0 ? (
-        <div className="text-center py-16">
-          <div className="text-5xl mb-4">📦</div>
-          <p className="text-gray-500 text-lg">Your pantry is empty.</p>
-          <p className="text-gray-400">Add some ingredients above to get started!</p>
-        </div>
+        <div className="text-center text-gray-500 py-12">Loading pantry...</div>
       ) : (
-        <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="text-left px-6 py-3 text-sm font-semibold text-gray-600">
-                  Ingredient
-                </th>
-                <th className="text-left px-6 py-3 text-sm font-semibold text-gray-600">
-                  Quantity
-                </th>
-                <th className="text-left px-6 py-3 text-sm font-semibold text-gray-600">
-                  Expires
-                </th>
-                <th className="text-right px-6 py-3 text-sm font-semibold text-gray-600">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedItems.map((item) => (
-                <tr
-                  key={item.id}
-                  className="border-b border-gray-100 hover:bg-gray-50 transition"
-                >
-                  <td className="px-6 py-4 font-medium text-gray-800">
-                    {item.name}
-                  </td>
-                  <td className="px-6 py-4 text-gray-600">
-                    {item.quantity_amount} {item.quantity_unit}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      {item.expiration_date && (
-                        <span className="text-gray-500 text-sm">
-                          {format(parseISO(item.expiration_date), 'MMM d, yyyy')}
-                        </span>
-                      )}
-                      {getExpirationBadge(item.expiration_date)}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={() => handleDelete(item.id)}
-                      className="text-red-500 hover:text-red-700 text-sm font-medium transition"
-                    >
-                      Remove
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {/* Quick-add starter ingredients — always visible */}
+          <div className="mb-8 bg-white rounded-xl shadow-md border border-gray-100 p-5">
+            <p className="text-sm font-semibold text-gray-700 mb-3">
+              Quick add common ingredients:
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {STARTER_INGREDIENTS.map((starter) => {
+                const alreadyAdded = items.some(
+                  (i) => i.name.toLowerCase() === starter.name.toLowerCase()
+                );
+                return (
+                  <button
+                    key={starter.name}
+                    onClick={() => !alreadyAdded && handleQuickAdd(starter)}
+                    disabled={alreadyAdded}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
+                      alreadyAdded
+                        ? 'bg-green-100 text-green-700 cursor-default'
+                        : 'bg-white border border-gray-200 text-gray-700 hover:bg-green-50 hover:border-green-300'
+                    }`}
+                  >
+                    {alreadyAdded ? '✓ ' : '+ '}
+                    {starter.name}
+                    {starter.packageLabel && (
+                      <span className="text-xs text-gray-400 ml-1">
+                        ({starter.packageLabel})
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Empty state message */}
+          {sortedItems.length === 0 && items.length === 0 && (
+            <div className="text-center py-8">
+              <div className="text-5xl mb-4">🥬</div>
+              <p className="text-gray-600 text-lg mb-2">Your pantry is empty!</p>
+              <p className="text-gray-400">
+                Add what you have at home using the form above or the quick-add buttons.
+              </p>
+            </div>
+          )}
+
+          {/* Pantry table */}
+          {sortedItems.length > 0 && (
+            <div>
+              <p className="text-xs text-gray-400 mb-2 text-right">
+                Click any value to edit it
+              </p>
+              <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="text-left px-6 py-3 text-sm font-semibold text-gray-600">
+                        Ingredient
+                      </th>
+                      <th className="text-left px-6 py-3 text-sm font-semibold text-gray-600">
+                        Quantity
+                      </th>
+                      <th className="text-left px-6 py-3 text-sm font-semibold text-gray-600">
+                        Expires
+                      </th>
+                      <th className="text-right px-6 py-3 text-sm font-semibold text-gray-600">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedItems.map((item) => (
+                      <tr
+                        key={item.id}
+                        className="border-b border-gray-100 hover:bg-gray-50 transition"
+                      >
+                        <td className="px-6 py-4 font-medium text-gray-800">
+                          <EditableCell
+                            value={item.name}
+                            onSave={(v) => handleEdit(item.id, 'name', v)}
+                          />
+                        </td>
+                        <td className="px-6 py-4 text-gray-600">
+                          <span className="inline-flex items-center gap-1">
+                            <EditableCell
+                              value={String(item.quantity_amount)}
+                              type="number"
+                              onSave={(v) => handleEdit(item.id, 'quantity_amount', v)}
+                              className="w-16 inline-block"
+                            />
+                            <EditableCell
+                              value={item.quantity_unit}
+                              type="select"
+                              options={UNIT_OPTIONS}
+                              onSave={(v) => handleEdit(item.id, 'quantity_unit', v)}
+                            />
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <EditableCell
+                              value={item.expiration_date || ''}
+                              type="date"
+                              onSave={(v) => handleEdit(item.id, 'expiration_date', v)}
+                              className="text-gray-500 text-sm"
+                            />
+                            {getExpirationBadge(item.expiration_date)}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button
+                            onClick={() => handleDelete(item.id)}
+                            className="text-red-500 hover:text-red-700 text-sm font-medium transition"
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       <p className="text-center text-gray-400 text-sm mt-6">
