@@ -243,8 +243,11 @@ export default function HomePage() {
             <Link href="/recipes" className="hover:text-gray-600 transition">
               Recipes
             </Link>
-            <Link href="/shopping" className="hover:text-gray-600 transition">
-              Shopping List
+            <Link href="/privacy" className="hover:text-gray-600 transition">
+              Privacy
+            </Link>
+            <Link href="/terms" className="hover:text-gray-600 transition">
+              Terms
             </Link>
           </div>
         </div>
