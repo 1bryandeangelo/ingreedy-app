@@ -211,6 +211,8 @@ export async function searchEdamamRecipes(
     app_key: EDAMAM_APP_KEY,
   });
 
+  if (options.from !== undefined) params.set('from', String(options.from));
+  if (options.to !== undefined) params.set('to', String(options.to));
   if (options.diet) params.set('diet', options.diet);
   if (options.health) params.set('health', options.health);
   if (options.cuisineType) params.set('cuisineType', options.cuisineType);

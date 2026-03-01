@@ -307,13 +307,21 @@ export default function RecipesPage() {
   const [filterExpiring, setFilterExpiring] = useState(false);
   const [error, setError] = useState('');
 
-  // Surplus state — keyed by meal ID
-  const [surplusMap, setSurplusMap] = useState<
-    Record<string, RecipeSurplus[]>
-  >({});
+  // Surplus state
+  const [surplusMap, setSurplusMap] = useState<Record<string, RecipeSurplus[]>>({});
   const [surplusPopupOpen, setSurplusPopupOpen] = useState<string | null>(null);
   const [addedToShoppingList, setAddedToShoppingList] = useState<Set<string>>(new Set());
   const [addingToList, setAddingToList] = useState<string | null>(null);
+
+  // NEW: Dismissed recipes
+  const [dismissedUris, setDismissedUris] = useState<Set<string>>(new Set());
+
+  // NEW: Recipe search
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchMode, setSearchMode] = useState(false);
+
+  // NEW: Shuffle offset
+  const [shuffleKey, setShuffleKey] = useState(0);
 
   useEffect(() => {
     if (!session) {
@@ -321,23 +329,24 @@ export default function RecipesPage() {
     }
   }, [session, router]);
 
-  // Fetch pantry items
+  // Fetch pantry items and dismissed recipes
   useEffect(() => {
     if (!session) return;
 
-    const fetchPantry = async () => {
-      const { data } = await supabase
-        .from('pantry_items')
-        .select('*')
-        .eq('user_id', session.user.id);
+    const fetchData = async () => {
+      const [pantryRes, dismissedRes] = await Promise.all([
+        supabase.from('pantry_items').select('*').eq('user_id', session.user.id),
+        (supabase as any).from('dismissed_recipes').select('recipe_uri').eq('user_id', session.user.id),
+      ]);
 
-      if (data) {
-        setPantryItems(data);
+      if (pantryRes.data) setPantryItems(pantryRes.data);
+      if (dismissedRes.data) {
+        setDismissedUris(new Set(dismissedRes.data.map((d: any) => d.recipe_uri)));
       }
       setLoading(false);
     };
 
-    fetchPantry();
+    fetchData();
   }, [session, supabase]);
 
   // Get expiring item names (within 5 days)
@@ -353,24 +362,24 @@ export default function RecipesPage() {
     .map((item) => item.name);
 
   // Search recipes using Edamam + quantity-aware ranking
-  const searchRecipes = useCallback(async () => {
-    if (pantryItems.length === 0) return;
+  const searchRecipes = useCallback(async (customQuery?: string) => {
+    if (!customQuery && pantryItems.length === 0) return;
     setSearching(true);
     setError('');
 
     try {
-      // Build search query from pantry items (top ingredients)
-      const searchTerms = pantryItems.slice(0, 5).map((i) => i.name);
-      const query = searchTerms.join(' ');
+      // Use custom query (search mode) or build from pantry
+      const query = customQuery || pantryItems.slice(0, 5).map((i) => i.name).join(' ');
 
-      const { meals: rawMeals } = await searchEdamamRecipes(query);
+      // Shuffle: use a random offset between 0-80 to get different results
+      const randomFrom = customQuery ? 0 : Math.floor(Math.random() * 60);
+      const { meals: rawMeals } = await searchEdamamRecipes(query, { from: randomFrom, to: randomFrom + 20 });
 
       // Deduplicate by name similarity
       const seen = new Set<string>();
       const meals = rawMeals.filter((m) => {
         const key = m.strMeal.toLowerCase().trim();
         if (seen.has(key)) return false;
-        // Check for near-duplicates (same words, different order)
         for (const existing of Array.from(seen)) {
           const words1 = key.split(' ').sort().join(' ');
           const words2 = existing.split(' ').sort().join(' ');
@@ -380,12 +389,11 @@ export default function RecipesPage() {
         return true;
       });
 
-      // Edamam returns full details already — no need for separate fetch
-      // Quantity-aware ranking
+      // Quantity-aware ranking (still rank even in search mode)
       const ranked = rankEdamamMeals(meals, pantryItems, expiringNames);
       setRankedMeals(ranked);
 
-      // Pre-calculate surplus for all ranked meals
+      // Pre-calculate surplus
       const newSurplusMap: Record<string, RecipeSurplus[]> = {};
       for (const meal of meals) {
         const surplus = calculateSurplus(meal, pantryItems);
@@ -395,7 +403,7 @@ export default function RecipesPage() {
       }
       setSurplusMap(newSurplusMap);
 
-      // Store full details (already have them from Edamam)
+      // Store full details
       const detailsMap: Record<string, MealDBMeal> = {};
       for (const meal of meals) {
         detailsMap[meal.idMeal] = meal;
@@ -492,47 +500,109 @@ export default function RecipesPage() {
     setAddingToList(null);
   };
 
-  const displayedMeals = filterExpiring
+  // NEW: Dismiss a recipe
+  const dismissRecipe = async (meal: RankedMeal) => {
+    if (!session) return;
+    const uri = meal.idMeal;
+    setDismissedUris((prev) => new Set(Array.from(prev).concat(uri)));
+
+    await (supabase as any).from('dismissed_recipes').insert({
+      user_id: session.user.id,
+      recipe_uri: uri,
+      recipe_name: meal.strMeal,
+    });
+  };
+
+  // NEW: Search handler
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    setSearchMode(true);
+    searchRecipes(searchQuery.trim());
+  };
+
+  // NEW: Back to pantry-based suggestions
+  const clearSearch = () => {
+    setSearchQuery('');
+    setSearchMode(false);
+    searchRecipes();
+  };
+
+  // Filter: expiring, dismissed
+  const displayedMeals = (filterExpiring
     ? rankedMeals.filter((m) => m.hasExpiringMatch)
-    : rankedMeals;
+    : rankedMeals
+  ).filter((m) => !dismissedUris.has(m.idMeal));
 
   if (!session) return null;
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 sm:mb-8 gap-4">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-green-800">
-            Recipe Suggestions
+            {searchMode ? 'Recipe Search' : 'Recipe Suggestions'}
           </h1>
-          <p className="text-gray-500 mt-1">
-            Ranked by ingredient match — quantities verified
+          <p className="text-gray-500 mt-1 text-sm">
+            {searchMode
+              ? `Results for "${searchQuery}" — ranked by your pantry match`
+              : 'Ranked by ingredient match — quantities verified'}
           </p>
         </div>
 
-        <div className="flex items-center gap-4">
-          {expiringNames.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {expiringNames.length > 0 && !searchMode && (
             <button
               onClick={() => setFilterExpiring(!filterExpiring)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
                 filterExpiring
                   ? 'bg-orange-600 text-white'
                   : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
               }`}
             >
-              ⏰ Uses Expiring ({expiringNames.length})
+              ⏰ Expiring ({expiringNames.length})
             </button>
           )}
-          <button
-            onClick={searchRecipes}
-            disabled={searching || pantryItems.length === 0}
-            className="bg-green-700 text-white px-5 py-2 rounded-lg font-medium hover:bg-green-800 disabled:opacity-50 transition"
-          >
-            {searching ? 'Searching…' : '🔄 Refresh'}
-          </button>
+          {!searchMode && (
+            <button
+              onClick={() => searchRecipes()}
+              disabled={searching || pantryItems.length === 0}
+              className="bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-800 disabled:opacity-50 transition"
+            >
+              {searching ? 'Searching...' : 'Shuffle'}
+            </button>
+          )}
+          {searchMode && (
+            <button
+              onClick={clearSearch}
+              className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition"
+            >
+              Back to suggestions
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Search bar */}
+      <form onSubmit={handleSearch} className="mb-6">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search for a recipe (e.g. pasta carbonara, chicken stir fry)..."
+            className="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          />
+          <button
+            type="submit"
+            disabled={searching || !searchQuery.trim()}
+            className="bg-green-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-green-800 disabled:opacity-50 transition flex-shrink-0"
+          >
+            Search
+          </button>
+        </div>
+      </form>
 
       {/* Legend */}
       {rankedMeals.length > 0 && (
@@ -816,6 +886,15 @@ export default function RecipesPage() {
                             } to shopping list`}
                       </button>
                     )}
+
+                    {/* Dismiss button */}
+                    <button
+                      onClick={() => dismissRecipe(meal)}
+                      className="text-gray-300 hover:text-red-400 text-sm transition ml-auto"
+                      title="Don't show this recipe again"
+                    >
+                      Hide
+                    </button>
 
                     {/* Surplus popup (anchored to this row) */}
                     {isSurplusOpen && surplusMap[meal.idMeal] && (
